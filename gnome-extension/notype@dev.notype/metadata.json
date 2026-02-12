@@ -1,0 +1,7 @@
+{
+  "uuid": "notype@dev.notype",
+  "name": "notype",
+  "description": "Global hotkey bridge for notype ToggleRecording over D-Bus",
+  "shell-version": ["42", "43", "44", "45", "46"],
+  "settings-schema": "org.gnome.shell.extensions.notype"
+}

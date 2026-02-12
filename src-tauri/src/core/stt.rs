@@ -1,9 +1,11 @@
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+use directories::ProjectDirs;
 use futures_util::StreamExt;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
+use tokio::time::{timeout, Duration};
 
 use super::config::ModelSize;
 use super::error::AppError;
@@ -17,7 +19,7 @@ impl SttService {
     pub fn new(model: ModelSize) -> Self {
         let model_dir = std::env::var("NOTYPE_MODEL_DIR")
             .map(PathBuf::from)
-            .unwrap_or_else(|_| std::env::temp_dir().join("notype-models"));
+            .unwrap_or_else(|_| default_model_dir());
 
         Self { model, model_dir }
     }
@@ -51,7 +53,18 @@ impl SttService {
 
         progress(0, "downloading", "初回モデルをダウンロードしています");
         let url = model_download_url(self.model);
-        let response = reqwest::get(url).await.map_err(|e| {
+        let client = reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(10))
+            .timeout(std::time::Duration::from_secs(120))
+            .build()
+            .map_err(|e| {
+                AppError::new(
+                    "モデルダウンロードクライアントの初期化に失敗しました",
+                    e.to_string(),
+                )
+            })?;
+
+        let response = client.get(url).send().await.map_err(|e| {
             AppError::new(
                 "モデルのダウンロードに失敗しました",
                 format!("request failed: {e}"),
@@ -118,23 +131,32 @@ impl SttService {
         let txt_path = PathBuf::from(format!("{}.txt", wav_path.display()));
         let _ = std::fs::remove_file(&txt_path);
 
-        let output = Command::new("whisper-cli")
-            .arg("-m")
-            .arg(self.model_path())
-            .arg("-f")
-            .arg(wav_path)
-            .arg("-otxt")
-            .arg("-nt")
-            .arg("-l")
-            .arg("ja")
-            .output()
-            .await
-            .map_err(|e| {
-                AppError::new(
-                    "文字起こし実行に失敗しました。whisper-cli を確認してください",
-                    e.to_string(),
-                )
-            })?;
+        let output = timeout(
+            Duration::from_secs(45),
+            Command::new("whisper-cli")
+                .arg("-m")
+                .arg(self.model_path())
+                .arg("-f")
+                .arg(wav_path)
+                .arg("-otxt")
+                .arg("-nt")
+                .arg("-l")
+                .arg("ja")
+                .output(),
+        )
+        .await
+        .map_err(|_| {
+            AppError::new(
+                "文字起こし処理がタイムアウトしました。モデルまたはCPU使用率を確認してください",
+                "whisper-cli final timeout",
+            )
+        })?
+        .map_err(|e| {
+            AppError::new(
+                "文字起こし実行に失敗しました。whisper-cli を確認してください",
+                e.to_string(),
+            )
+        })?;
 
         if !output.status.success() {
             return Err(AppError::new(
@@ -158,16 +180,87 @@ impl SttService {
 
     pub async fn transcribe_partial_hint(
         &self,
-        elapsed_ms: u64,
+        _elapsed_ms: u64,
         wav_path: &Path,
     ) -> Result<String, AppError> {
         if !wav_path.exists() {
             return Ok(String::new());
         }
 
-        let seconds = elapsed_ms / 1000;
-        Ok(format!("…録音中 {}s", seconds))
+        if !self.model_path().exists() {
+            // モデル未準備の場合、partial は出さず final のみで継続。
+            return Ok(String::new());
+        }
+
+        let txt_path = PathBuf::from(format!("{}.txt", wav_path.display()));
+        let output = timeout(
+            Duration::from_secs(5),
+            Command::new("whisper-cli")
+                .arg("-m")
+                .arg(self.model_path())
+                .arg("-f")
+                .arg(wav_path)
+                .arg("-otxt")
+                .arg("-nt")
+                .arg("-l")
+                .arg("ja")
+                .output(),
+        )
+        .await
+        .map_err(|_| {
+            AppError::new(
+                "リアルタイム文字起こしがタイムアウトしました",
+                "whisper-cli partial timeout",
+            )
+        })?
+        .map_err(|e| {
+            AppError::new(
+                "リアルタイム文字起こしに失敗しました。whisper-cli を確認してください",
+                e.to_string(),
+            )
+        })?;
+
+        if !output.status.success() {
+            return Ok(String::new());
+        }
+
+        let mut text = std::fs::read_to_string(&txt_path)
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
+
+        if text.is_empty() {
+            let raw = String::from_utf8_lossy(&output.stdout).to_string();
+            text = parse_whisper_text(&raw);
+        }
+
+        Ok(text)
     }
+}
+
+fn default_model_dir() -> PathBuf {
+    if let Some(dirs) = ProjectDirs::from("dev", "notype", "notype") {
+        let dir = dirs.cache_dir().join("models");
+        return dir;
+    }
+    std::env::temp_dir().join("notype-models")
+}
+
+fn parse_whisper_text(raw: &str) -> String {
+    raw.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(|line| {
+            if let Some(idx) = line.rfind(']') {
+                line[idx + 1..].trim()
+            } else {
+                line
+            }
+        })
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+        .trim()
+        .to_string()
 }
 
 fn model_download_url(model: ModelSize) -> &'static str {

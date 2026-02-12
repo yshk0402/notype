@@ -2,12 +2,15 @@ use tokio::process::Command;
 
 use super::error::AppError;
 
-pub struct Injector {
+pub struct Injector;
+
+#[derive(Debug, Default)]
+pub struct InjectionSession {
     last_partial: String,
     partial_allowed: bool,
 }
 
-impl Injector {
+impl InjectionSession {
     pub fn new() -> Self {
         Self {
             last_partial: String::new(),
@@ -15,39 +18,72 @@ impl Injector {
         }
     }
 
-    pub fn reset_session(&mut self) {
+    pub fn reset(&mut self) {
         self.last_partial.clear();
         self.partial_allowed = true;
     }
 
-    pub fn can_partial(&self) -> bool {
+    pub fn is_partial_allowed(&self) -> bool {
         self.partial_allowed
     }
 
-    pub async fn type_final(&mut self, text: &str) -> Result<(), AppError> {
-        self.type_text(text).await?;
-        self.last_partial.clear();
+    pub fn mark_partial_denied(&mut self) {
+        self.partial_allowed = false;
+    }
+
+    pub fn set_last_partial(&mut self, text: &str) {
+        self.last_partial = text.to_string();
+    }
+
+    pub fn last_partial(&self) -> &str {
+        &self.last_partial
+    }
+}
+
+impl Injector {
+    pub fn new() -> Self {
+        Self
+    }
+
+    pub async fn clear_partial(&self, session: &mut InjectionSession) -> Result<(), AppError> {
+        if session.last_partial().is_empty() {
+            return Ok(());
+        }
+        for _ in session.last_partial().chars() {
+            self.press_key("BackSpace").await?;
+        }
+        session.set_last_partial("");
         Ok(())
     }
 
-    pub async fn type_partial_replace(&mut self, text: &str) -> Result<(), AppError> {
-        if !self.partial_allowed {
+    pub async fn type_final(
+        &self,
+        session: &mut InjectionSession,
+        text: &str,
+    ) -> Result<(), AppError> {
+        self.clear_partial(session).await?;
+        self.type_text(text).await?;
+        session.reset();
+        Ok(())
+    }
+
+    pub async fn type_partial_replace(
+        &self,
+        session: &mut InjectionSession,
+        text: &str,
+    ) -> Result<(), AppError> {
+        if !session.is_partial_allowed() {
             return Ok(());
         }
 
-        if !self.last_partial.is_empty() {
-            // Best-effort replacement by backspacing previous partial.
-            for _ in self.last_partial.chars() {
-                self.press_key("BackSpace").await?;
-            }
-        }
+        self.clear_partial(session).await?;
 
         if let Err(err) = self.type_text(text).await {
-            self.partial_allowed = false;
+            session.mark_partial_denied();
             return Err(err);
         }
 
-        self.last_partial = text.to_string();
+        session.set_last_partial(text);
         Ok(())
     }
 

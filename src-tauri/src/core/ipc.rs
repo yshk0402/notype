@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::Mutex;
 use zbus::interface;
 
+use super::app::AppRuntime;
 use super::error::AppError;
+use super::state::ErrorEvent;
 
 pub const BUS_NAME: &str = "dev.notype.app";
 pub const OBJECT_PATH: &str = "/dev/notype/app";
@@ -13,11 +15,12 @@ pub const INTERFACE_NAME: &str = "dev.notype.app";
 #[derive(Clone)]
 pub struct IpcController {
     app: AppHandle,
+    runtime: Arc<AppRuntime>,
 }
 
 impl IpcController {
-    pub fn new(app: AppHandle) -> Self {
-        Self { app }
+    pub fn new(app: AppHandle, runtime: Arc<AppRuntime>) -> Self {
+        Self { app, runtime }
     }
 
     fn show_main_impl(&self) {
@@ -44,6 +47,29 @@ impl IpcController {
         } else {
             tracing::warn!("ShowSettings: settings window not found");
         }
+    }
+
+    fn toggle_recording_impl(&self) {
+        tracing::info!("ToggleRecording: request received");
+        let runtime = self.runtime.clone();
+        let app = self.app.clone();
+        tauri::async_runtime::spawn(async move {
+            match runtime.toggle_recording(app.clone()).await {
+                Ok(state) => {
+                    tracing::info!("ToggleRecording: done state={state:?}");
+                }
+                Err(err) => {
+                    let _ = app.emit(
+                        "notype://error",
+                        ErrorEvent {
+                            user_message: err.user_message.clone(),
+                            details: err.details.clone(),
+                        },
+                    );
+                    tracing::warn!("ToggleRecording: failed to toggle recording: {err}");
+                }
+            }
+        });
     }
 
     fn quit_impl(&self) {
@@ -74,6 +100,11 @@ impl IpcService {
     #[zbus(name = "ShowSettings")]
     async fn show_settings(&self) {
         self.controller.lock().await.show_settings_impl();
+    }
+
+    #[zbus(name = "ToggleRecording")]
+    async fn toggle_recording(&self) {
+        self.controller.lock().await.toggle_recording_impl();
     }
 
     #[zbus(name = "Quit")]

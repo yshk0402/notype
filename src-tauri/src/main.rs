@@ -9,18 +9,19 @@ use core::app::AppRuntime;
 use core::config::{load_config, AppConfig, PillPosition};
 use core::error::AppError;
 use core::ipc::{try_call_existing, IpcController, IpcService, BUS_NAME, OBJECT_PATH};
-use core::state::RuntimeState;
+use core::state::{DependencyWarningEvent, RuntimeState};
 use tauri::Manager;
-use tauri::{PhysicalPosition, Position, WindowEvent};
+use tauri::{Emitter, PhysicalPosition, Position, WindowEvent};
 use tokio::process::Command;
 
 #[derive(Clone)]
-struct SharedRuntime(Arc<AppRuntime>);
+pub(crate) struct SharedRuntime(pub Arc<AppRuntime>);
 
 #[derive(Clone)]
 struct StartupFlags {
     show_settings: bool,
     initial_pill_position: Option<PillPosition>,
+    toggle_on_startup: bool,
 }
 
 #[tauri::command]
@@ -88,6 +89,26 @@ async fn stop_recording(
 }
 
 #[tauri::command]
+async fn toggle_recording(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, SharedRuntime>,
+) -> Result<RuntimeState, String> {
+    state
+        .0
+        .toggle_recording(app)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn prepare_injection_target(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(main) = app.get_webview_window("main") {
+        main.hide().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 async fn type_text(state: tauri::State<'_, SharedRuntime>, text: String) -> Result<(), String> {
     state.0.type_text(text).await.map_err(|e| e.to_string())
 }
@@ -136,13 +157,31 @@ async fn show_settings(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn check_runtime_dependencies() -> Vec<String> {
-    let required = ["arecord", "wtype", "wl-copy", "whisper-cli"];
-    required
+fn check_runtime_dependencies(app: tauri::AppHandle) -> Vec<String> {
+    let required = [
+        ("arecord", "sudo apt-get install -y alsa-utils"),
+        ("wtype", "sudo apt-get install -y wtype"),
+        ("wl-copy", "sudo apt-get install -y wl-clipboard"),
+        ("whisper-cli", "./scripts/install-whisper-cli-local.sh"),
+        ("sxhkd", "sudo apt-get install -y sxhkd"),
+    ];
+    let missing: Vec<String> = required
         .iter()
-        .filter(|name| !command_exists(name))
-        .map(|name| (*name).to_string())
-        .collect()
+        .filter(|(name, _)| !command_exists(name))
+        .map(|(name, install)| format!("{name} (install: {install})"))
+        .collect();
+
+    if !missing.is_empty() {
+        let _ = app.emit(
+            "notype://dependency-warning",
+            DependencyWarningEvent {
+                missing: missing.clone(),
+                install_hint: "sudo apt-get install -y alsa-utils wtype wl-clipboard sxhkd && ./scripts/install-whisper-cli-local.sh".to_string(),
+            },
+        );
+    }
+
+    missing
 }
 
 #[tokio::main]
@@ -150,6 +189,8 @@ async fn main() {
     init_tracing();
 
     let args: Vec<String> = std::env::args().skip(1).collect();
+    let has_toggle = args.iter().any(|a| a == "--toggle");
+
     if !args.is_empty() {
         if args.iter().any(|a| a == "--quit") {
             let called = try_call_existing("Quit").await.unwrap_or(false);
@@ -164,6 +205,16 @@ async fn main() {
                 return;
             }
         }
+
+        if has_toggle {
+            tracing::info!("toggle requested from cli");
+            let called = try_call_existing("ToggleRecording").await.unwrap_or(false);
+            if called {
+                tracing::info!("toggle routed to existing instance");
+                return;
+            }
+            tracing::info!("no existing instance; will start and toggle on startup");
+        }
     } else {
         let called = try_call_existing("ShowMain").await.unwrap_or(false);
         if called {
@@ -177,6 +228,7 @@ async fn main() {
     let flags = StartupFlags {
         show_settings: args.iter().any(|a| a == "--settings"),
         initial_pill_position,
+        toggle_on_startup: has_toggle,
     };
 
     tauri::Builder::default()
@@ -189,6 +241,8 @@ async fn main() {
             set_pill_position,
             start_recording,
             stop_recording,
+            toggle_recording,
+            prepare_injection_target,
             type_text,
             copy_text,
             current_text,
@@ -198,8 +252,9 @@ async fn main() {
         ])
         .setup(|app| {
             let app_handle = app.handle().clone();
+            let shared_runtime = app.state::<SharedRuntime>().0.clone();
             tauri::async_runtime::spawn(async move {
-                let controller = IpcController::new(app_handle.clone());
+                let controller = IpcController::new(app_handle.clone(), shared_runtime);
                 let service = IpcService::new(controller);
 
                 let conn = zbus::connection::Builder::session()
@@ -217,10 +272,16 @@ async fn main() {
             });
 
             let state = app.state::<std::sync::Mutex<StartupFlags>>();
-            let (show_settings, initial_pill_position) = state
+            let (show_settings, initial_pill_position, toggle_on_startup) = state
                 .lock()
-                .map(|s| (s.show_settings, s.initial_pill_position))
-                .unwrap_or((false, None));
+                .map(|s| {
+                    (
+                        s.show_settings,
+                        s.initial_pill_position,
+                        s.toggle_on_startup,
+                    )
+                })
+                .unwrap_or((false, None, false));
 
             if show_settings {
                 if let Some(win) = app.get_webview_window("settings") {
@@ -243,6 +304,15 @@ async fn main() {
                     let _ =
                         win.set_position(Position::Physical(PhysicalPosition::new(pos.x, pos.y)));
                 }
+            }
+
+            if toggle_on_startup {
+                let app_handle = app.handle().clone();
+                let runtime = app.state::<SharedRuntime>().0.clone();
+                tauri::async_runtime::spawn(async move {
+                    tracing::info!("toggle_on_startup: starting recording");
+                    let _ = runtime.start_recording(app_handle).await;
+                });
             }
 
             Ok(())

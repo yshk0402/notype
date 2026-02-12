@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.notype" path="/org/gnome/shell/extensions/notype/">
+    <key name="toggle-recording" type="as">
+      <default>["&lt;Alt&gt;x"]</default>
+      <summary>Toggle recording hotkey</summary>
+      <description>Keyboard shortcut used to call notype ToggleRecording over D-Bus.</description>
+    </key>
+  </schema>
+</schemalist>

@@ -3,19 +3,33 @@ import { getCurrentWindow, invoke, listen } from "./tauri-bridge.js";
 const stateText = document.getElementById("stateText");
 const stateDot = document.getElementById("stateDot");
 const latencyHint = document.getElementById("latencyHint");
-const toggleRecordBtn = document.getElementById("toggleRecord");
 const openSettingsBtn = document.getElementById("openSettings");
 const pill = document.getElementById("pill");
 
 const currentWindow = getCurrentWindow();
-let runtimeState = "Idle";
+const unlistenFns = [];
 let isDraggingPill = false;
 
+function normalizeError(err) {
+  if (typeof err === "string") {
+    return err;
+  }
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return String(err);
+}
+
 function setState(state) {
-  runtimeState = state;
-  stateText.textContent = state;
-  stateDot.className = `state-dot ${state.toLowerCase()}`;
-  toggleRecordBtn.classList.toggle("recording", state === "Recording");
+  const lower = String(state || "Idle").toLowerCase();
+  stateText.textContent = state || "Idle";
+  stateDot.className = `state-dot ${lower}`;
+}
+
+function setErrorState(message) {
+  stateText.textContent = "Error";
+  stateDot.className = "state-dot error";
+  latencyHint.textContent = `${message} / Alt+X で再試行`;
 }
 
 async function persistPillPosition() {
@@ -29,28 +43,11 @@ async function persistPillPosition() {
   await invoke("set_pill_position", { position: { x: pos.x, y: pos.y } });
 }
 
-async function startOrStopRecording() {
-  if (runtimeState === "Recording") {
-    setState("Processing");
-    const text = await invoke("stop_recording");
-    setState("Ready");
-    latencyHint.textContent = text ? "transcribed" : "no speech";
-    return;
-  }
-
-  await invoke("start_recording");
-  setState("Recording");
-  latencyHint.textContent = "recording...";
-}
-
 async function checkRuntimeDependencies() {
   const missing = await invoke("check_runtime_dependencies");
   if (!Array.isArray(missing) || missing.length === 0) {
-    toggleRecordBtn.disabled = false;
     return;
   }
-
-  toggleRecordBtn.disabled = true;
   latencyHint.textContent = `missing: ${missing.join(", ")}`;
 }
 
@@ -61,42 +58,31 @@ async function refreshState() {
       setState(next);
     }
   } catch {
-    // Fallback to optimistic UI state when command is unavailable.
+    // Realtime events are authoritative; ignore polling failures.
   }
 }
 
-toggleRecordBtn.addEventListener("click", async () => {
-  try {
-    await startOrStopRecording();
-  } catch (e) {
-    latencyHint.textContent = String(e);
-    setState("Idle");
-  }
-});
-
-openSettingsBtn.addEventListener("click", async () => {
+async function onOpenSettingsClick() {
   try {
     await invoke("show_settings");
   } catch (e) {
-    latencyHint.textContent = `settings open failed: ${String(e)}`;
+    setErrorState(`settings open failed: ${normalizeError(e)}`);
   }
-});
+}
 
-pill.addEventListener("mousedown", async (event) => {
+function onPillMouseDown(event) {
   if (event.target instanceof HTMLButtonElement) {
     return;
   }
   isDraggingPill = true;
   if (currentWindow?.startDragging) {
-    try {
-      await currentWindow.startDragging();
-    } catch {
-      // Ignore drag failures on unsupported environments.
-    }
+    currentWindow.startDragging().catch(() => {
+      // Ignore drag failures.
+    });
   }
-});
+}
 
-window.addEventListener("mouseup", async () => {
+async function onMouseUp() {
   if (!isDraggingPill) {
     return;
   }
@@ -104,35 +90,79 @@ window.addEventListener("mouseup", async () => {
   try {
     await persistPillPosition();
   } catch {
-    // Ignore persisting errors to keep interaction smooth.
+    // Ignore persist errors.
   }
-});
+}
 
-listen("notype://transcript", (event) => {
-  const payload = event.payload;
-  setState(payload.state);
+async function subscribeEvents() {
+  const transcriptUnlisten = await listen("notype://transcript", (event) => {
+    const payload = event.payload;
+    setState(payload.state);
 
-  if (payload.latencyMs) {
-    latencyHint.textContent = `latency ${payload.latencyMs}ms`;
-  } else if (payload.state === "Ready") {
-    latencyHint.textContent = "typed to focused app";
-  } else if (payload.state === "Recording") {
-    latencyHint.textContent = "recording...";
+    if (payload.state === "Ready") {
+      latencyHint.textContent = payload.finalText
+        ? "typed to focused app / Alt+X: start"
+        : "no speech / Alt+X: retry";
+      return;
+    }
+
+    if (payload.state === "Recording") {
+      latencyHint.textContent = "recording... / Alt+X: stop";
+      return;
+    }
+
+    if (payload.state === "Processing") {
+      latencyHint.textContent = "processing...";
+      return;
+    }
+
+    latencyHint.textContent = "Alt+X: start/stop";
+  });
+
+  const errorUnlisten = await listen("notype://error", (event) => {
+    const payload = event.payload;
+    console.error(payload.details);
+    setErrorState(payload.userMessage);
+  });
+
+  const modelUnlisten = await listen("notype://model-download", (event) => {
+    const payload = event.payload;
+    latencyHint.textContent = `${payload.status} ${payload.progress}%`;
+  });
+
+  const dependencyUnlisten = await listen("notype://dependency-warning", (event) => {
+    const payload = event.payload;
+    latencyHint.textContent = `missing: ${payload.missing.join(", ")}`;
+  });
+
+  [transcriptUnlisten, errorUnlisten, modelUnlisten, dependencyUnlisten]
+    .filter((fn) => typeof fn === "function")
+    .forEach((fn) => unlistenFns.push(fn));
+}
+
+function destroy() {
+  for (const unlisten of unlistenFns.splice(0)) {
+    try {
+      unlisten();
+    } catch {
+      // Ignore unlisten errors.
+    }
   }
-});
-
-listen("notype://error", (event) => {
-  const payload = event.payload;
-  latencyHint.textContent = payload.userMessage;
-  setState("Idle");
-  console.error(payload.details);
-});
-
-listen("notype://model-download", (event) => {
-  const payload = event.payload;
-  latencyHint.textContent = `${payload.status} ${payload.progress}%`;
-});
+  openSettingsBtn.removeEventListener("click", onOpenSettingsClick);
+  pill.removeEventListener("mousedown", onPillMouseDown);
+  window.removeEventListener("mouseup", onMouseUp);
+}
 
 setState("Idle");
-checkRuntimeDependencies();
+openSettingsBtn.addEventListener("click", onOpenSettingsClick);
+pill.addEventListener("mousedown", onPillMouseDown);
+window.addEventListener("mouseup", onMouseUp);
+window.addEventListener("beforeunload", destroy);
+
+subscribeEvents()
+  .then(checkRuntimeDependencies)
+  .catch((e) => {
+    setErrorState(normalizeError(e));
+  });
+
 setInterval(refreshState, 1200);

@@ -66,7 +66,8 @@ impl Default for AppConfig {
             llm_api_base_url: "".to_string(),
             llm_api_key: "".to_string(),
             llm_model: "".to_string(),
-            realtime_enabled: true,
+            // Recovery default: prioritize stable final transcription first.
+            realtime_enabled: false,
             partial_autotype_mode: PartialAutotypeMode::Replace,
             pill_position: None,
         }
@@ -90,19 +91,47 @@ fn config_path() -> anyhow::Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use once_cell::sync::Lazy;
+    use std::sync::Mutex;
     use uuid::Uuid;
 
+    static TEST_ENV_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+
+    struct EnvGuard {
+        key: &'static str,
+        original: Option<String>,
+    }
+
+    impl EnvGuard {
+        fn set(key: &'static str, value: String) -> Self {
+            let original = std::env::var(key).ok();
+            std::env::set_var(key, value);
+            Self { key, original }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            if let Some(value) = self.original.clone() {
+                std::env::set_var(self.key, value);
+            } else {
+                std::env::remove_var(self.key);
+            }
+        }
+    }
+
     #[test]
-    fn default_is_small_and_realtime() {
+    fn default_is_small_and_final_only() {
         let cfg = AppConfig::default();
         assert!(matches!(cfg.model, ModelSize::Small));
-        assert!(cfg.realtime_enabled);
+        assert!(!cfg.realtime_enabled);
     }
 
     #[test]
     fn broken_config_recovers_to_default() {
+        let _guard_lock = TEST_ENV_LOCK.lock().expect("lock");
         let temp = std::env::temp_dir().join(format!("notype-test-{}", Uuid::new_v4()));
-        std::env::set_var("NOTYPE_CONFIG_DIR", temp.display().to_string());
+        let _env_guard = EnvGuard::set("NOTYPE_CONFIG_DIR", temp.display().to_string());
         std::fs::create_dir_all(&temp).expect("mkdir");
         std::fs::write(temp.join("config.json"), "{invalid").expect("write");
 
@@ -114,8 +143,9 @@ mod tests {
 
     #[test]
     fn pill_position_roundtrip() {
+        let _guard_lock = TEST_ENV_LOCK.lock().expect("lock");
         let temp = std::env::temp_dir().join(format!("notype-test-{}", Uuid::new_v4()));
-        std::env::set_var("NOTYPE_CONFIG_DIR", temp.display().to_string());
+        let _env_guard = EnvGuard::set("NOTYPE_CONFIG_DIR", temp.display().to_string());
         std::fs::create_dir_all(&temp).expect("mkdir");
 
         let mut cfg = AppConfig::default();
@@ -137,7 +167,17 @@ pub fn load_config() -> anyhow::Result<AppConfig> {
 
     let raw = fs::read_to_string(&path)?;
     match serde_json::from_str::<AppConfig>(&raw) {
-        Ok(cfg) => Ok(cfg),
+        Ok(mut cfg) => {
+            // Force stable mode first to avoid Processing stuck loops in recovery.
+            let allow_realtime = std::env::var("NOTYPE_ALLOW_REALTIME")
+                .map(|v| v == "1")
+                .unwrap_or(false);
+            if cfg.realtime_enabled && !allow_realtime {
+                cfg.realtime_enabled = false;
+                let _ = save_config(&cfg);
+            }
+            Ok(cfg)
+        }
         Err(_) => {
             // Recover from broken config by regenerating defaults.
             let cfg = AppConfig::default();

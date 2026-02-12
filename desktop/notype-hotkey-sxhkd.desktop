@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=notype-hotkey-sxhkd
+Comment=Start sxhkd for notype hotkey
+Exec=/bin/bash -lc 'pgrep -x sxhkd >/dev/null || sxhkd -c "$HOME/.config/sxhkd/sxhkdrc"'
+Terminal=false
+X-GNOME-Autostart-enabled=true

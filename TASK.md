@@ -19,7 +19,7 @@
 - `Type` / `Copy`
 - Auto-type ON/OFF
 - 常時最前面ピル + ドラッグ移動
-- CLI (`notype`, `notype --settings`, `notype --quit`)
+- CLI (`notype`, `notype --settings`, `notype --toggle`, `notype --quit`)
 - D-Bus 単一インスタンス制御
 - ログイン時自動起動
 - エラー時 `Idle` 復帰、一時ファイル清掃
@@ -35,6 +35,10 @@
 - タスク軸: `AC駆動`
 - モデル配布: 初回起動時 DL（default `small`）
 - IPC: `D-Bus`
+- ホットキー公式導線（非GNOME）: `sxhkd + Alt+X`
+- GNOME専用導線: `GNOME Shell拡張`
+- custom-keybinding: legacy fallback
+- 復旧デフォルト: `realtime_enabled=false`（final-only優先）
 - 注入主経路: `wtype`
 - UI: 常駐ピル + 別設定ウィンドウ
 - 閉じる操作デフォルト: 非表示（常駐継続）
@@ -48,12 +52,16 @@
 - `notype --settings`
   - 未起動: 起動 + 設定画面表示
   - 起動済み: 設定画面前面化
+- `notype --toggle`
+  - 未起動: 起動して録音開始
+  - 起動済み: 録音トグル（開始/停止）
 - `notype --quit`
   - 起動済みインスタンスへ終了要求送信
 
 ### 3.2 IPC（D-Bus）契約
 - `ShowMain`
 - `ShowSettings`
+- `ToggleRecording`
 - `Quit`
 
 ### 3.3 状態機械契約
@@ -238,10 +246,12 @@
 - [x] 単一インスタンス保証
 - [x] `ShowMain` 実装
 - [x] `ShowSettings` 実装
+- [x] `ToggleRecording` 実装
 - [x] `Quit` 実装
 - [x] CLI エントリ実装
   - `notype`
   - `notype --settings`
+  - `notype --toggle`
   - `notype --quit`
 - [x] 設定ウィンドウ前面化制御
 - [x] IPC 前面化/終了処理の失敗ログ追加

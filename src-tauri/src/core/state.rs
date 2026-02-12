@@ -32,3 +32,10 @@ pub struct ModelDownloadEvent {
     pub status: String,
     pub message: String,
 }
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DependencyWarningEvent {
+    pub missing: Vec<String>,
+    pub install_hint: String,
+}

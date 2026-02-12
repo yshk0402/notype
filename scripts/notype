@@ -2,12 +2,21 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BIN="${SCRIPT_DIR}/../src-tauri/target/release/notype"
+BIN_RELEASE="${SCRIPT_DIR}/../src-tauri/target/release/notype"
+BIN_DEBUG="${SCRIPT_DIR}/../src-tauri/target/debug/notype"
 
-if [[ ! -x "$BIN" ]]; then
-  echo "binary not found: $BIN"
-  echo "build with: cargo build --manifest-path src-tauri/Cargo.toml --release"
-  exit 1
+if [[ -x "$BIN_RELEASE" ]]; then
+  exec "$BIN_RELEASE" "$@"
 fi
 
-exec "$BIN" "$@"
+if [[ -x "$BIN_DEBUG" ]]; then
+  exec "$BIN_DEBUG" "$@"
+fi
+
+echo "binary not found:"
+echo "  - $BIN_RELEASE"
+echo "  - $BIN_DEBUG"
+echo "build with one of:"
+echo "  cargo build --manifest-path src-tauri/Cargo.toml --release"
+echo "  cargo build --manifest-path src-tauri/Cargo.toml"
+exit 1

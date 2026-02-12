@@ -97,6 +97,11 @@ async function checkDependencies() {
     li.textContent = `missing: ${name}`;
     depsList.appendChild(li);
   });
+
+  const hint = document.createElement("li");
+  hint.textContent =
+    "install: sudo apt-get install -y alsa-utils wtype wl-clipboard && ./scripts/install-whisper-cli-local.sh";
+  depsList.appendChild(hint);
 }
 
 navButtons.forEach((btn) => {

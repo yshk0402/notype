@@ -7,6 +7,7 @@
   --recording: #ef4444;
   --processing: #f59e0b;
   --ready: #10b981;
+  --error: #dc2626;
 }
 
 * {
@@ -26,6 +27,7 @@ body {
   align-items: center;
   gap: 10px;
   height: 56px;
+  min-width: 280px;
   padding: 0 14px;
   border-radius: 22px;
   border: 1px solid var(--line);
@@ -42,11 +44,6 @@ body {
   background: white;
   cursor: pointer;
   -webkit-app-region: no-drag;
-}
-
-.icon-btn.mic.recording {
-  border-color: rgba(239, 68, 68, 0.45);
-  background: rgba(239, 68, 68, 0.12);
 }
 
 .state-dot {
@@ -68,14 +65,18 @@ body {
   background: var(--ready);
 }
 
+.state-dot.error {
+  background: var(--error);
+}
+
 .state-text {
-  width: 72px;
+  width: 84px;
   font-size: 13px;
   color: var(--muted);
 }
 
 .hint {
-  max-width: 120px;
+  max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
