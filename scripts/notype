@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BIN="${SCRIPT_DIR}/../src-tauri/target/release/notype"
+
+if [[ ! -x "$BIN" ]]; then
+  echo "binary not found: $BIN"
+  echo "build with: cargo build --manifest-path src-tauri/Cargo.toml --release"
+  exit 1
+fi
+
+exec "$BIN" "$@"

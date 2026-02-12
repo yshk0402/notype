@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=notype
+Comment=Local-first realtime dictation pill
+Exec=notype
+Icon=notype
+Terminal=false
+Categories=Utility;Audio;Accessibility;
+StartupNotify=true

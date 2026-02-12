@@ -1,0 +1,48 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "notype",
+  "version": "0.1.0",
+  "identifier": "dev.notype.app",
+  "build": {
+    "beforeDevCommand": "",
+    "beforeBuildCommand": "",
+    "frontendDist": "../frontend"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "notype",
+        "url": "pill.html",
+        "width": 360,
+        "height": 72,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "resizable": false,
+        "transparent": true,
+        "visible": true,
+        "skipTaskbar": false
+      },
+      {
+        "label": "settings",
+        "title": "notype Settings",
+        "url": "settings.html",
+        "width": 920,
+        "height": 620,
+        "visible": false,
+        "resizable": true,
+        "alwaysOnTop": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "appimage",
+    "icon": [
+      "../assets/icon.png"
+    ]
+  }
+}

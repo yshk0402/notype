@@ -1,0 +1,95 @@
+:root {
+  color-scheme: light;
+  --bg: #f7f7f8;
+  --line: rgba(10, 10, 10, 0.08);
+  --text: #202428;
+  --muted: #68707a;
+  --idle: #9ca3af;
+  --recording: #ef4444;
+  --processing: #f59e0b;
+  --ready: #10b981;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: transparent;
+  font-family: "Noto Sans JP", "SF Pro Text", sans-serif;
+  color: var(--text);
+}
+
+.app {
+  padding: 8px;
+}
+
+.pill {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 56px;
+  padding: 0 16px;
+  border-radius: 22px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12), 0 2px 4px rgba(15, 23, 42, 0.07);
+  -webkit-app-region: drag;
+}
+
+.icon-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: white;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.state-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--idle);
+}
+
+.state-dot.recording { background: var(--recording); }
+.state-dot.processing { background: var(--processing); }
+.state-dot.ready { background: var(--ready); }
+.state-text {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.settings {
+  margin-top: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+button {
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.settings {
+  display: grid;
+  gap: 8px;
+}
+
+label {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.hint {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  min-height: 18px;
+}

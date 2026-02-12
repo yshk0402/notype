@@ -1,160 +1,160 @@
-# AGENTS.md - notype Implementation Guide
+# AGENTS.md - notype 実装ガイド
 
-## 1. Purpose And Scope
+## 1. 目的とスコープ
 
-### 1.1 Goal
-- Deliver an always-available floating pill on Linux GNOME that supports:
-  - Voice input
-  - Local STT
-  - Text injection into the currently focused app
-- Keep interaction lightweight for short dictation workflows.
+### 1.1 目的
+- Linux GNOME 上で常駐するフローティングピルを提供し、以下を実現する。
+  - 音声入力
+  - ローカル STT
+  - 現在フォーカス中アプリへのテキスト入力
+- 短時間ディクテーションで軽快に使える操作体験を維持する。
 
-### 1.2 Non-Goals (MVP Exclusions)
-- Long meeting transcription and speaker diarization
-- Team sharing/collaboration workflows
-- Advanced multi-language translation/rewriting
-- Mobile integration
+### 1.2 非目的（MVP 対象外）
+- 長時間会議の文字起こしや話者分離
+- チーム共有・コラボレーション機能
+- 高度な多言語翻訳・リライト
+- モバイル連携
 
-## 2. Product Principles
-- Prioritize zero-cost operation for core features.
-- Must work offline when LLM post-processing is disabled.
-- Wayland-first behavior; Xorg is best effort.
-- UI architecture is fixed:
-  - Persistent floating pill window
-  - Separate settings window
+## 2. プロダクト原則
+- 基本機能は無料運用を最優先にする。
+- LLM 後処理 OFF ならオフラインで成立させる。
+- Wayland 優先、Xorg はベストエフォートとする。
+- UI 構成は固定する。
+  - 常駐フローティングピル
+  - 設定は別ウィンドウ
 
-## 3. MVP Priority Order
+## 3. MVP 実装優先順位
 
-### P0 (Must Build First)
-- Recording start/stop
-- Async STT execution
-- Result display
-- `Type` and `Copy` actions
-- Auto-type toggle support
-- Always-on-top floating pill
-- Drag to move
+### P0（最優先）
+- 録音開始/停止
+- STT の非同期実行
+- 結果表示
+- `Type` と `Copy` 操作
+- Auto-type の ON/OFF 対応
+- 常に最前面のピル表示
+- ドラッグ移動
 
-### P1 (Core Operation Completeness)
-- CLI behavior:
+### P1（運用に必須）
+- CLI 挙動
   - `notype`
   - `notype --settings`
   - `notype --quit`
-- Single-instance behavior
-- Login-time auto-start
+- 単一インスタンス制御
+- ログイン時自動起動
 
-### P2 (Post-MVP Expansion)
-- LLM post-processing
-- LLM provider extensions
-- Input injection fallback expansion
+### P2（MVP 後）
+- LLM 後処理
+- LLM プロバイダ拡張
+- 入力注入フォールバック拡充
 
-## 4. Fixed Implementation Spec
+## 4. 固定実装仕様
 
-### 4.1 Pill UI
-- Pill contains exactly 2 icons:
-  - Settings icon (open settings window)
-  - Voice icon (start/stop recording)
-- Must show state clearly with minimal visual cues.
+### 4.1 ピル UI
+- ピルは必ず 2 アイコン構成にする。
+  - 設定アイコン（設定ウィンドウを開く）
+  - 音声アイコン（録音開始/停止）
+- 状態は最小限の視覚表現で明確に示す。
 
-### 4.2 Runtime States
+### 4.2 実行時状態
 - `Idle`
 - `Recording`
 - `Processing`
 - `Ready`
 
-### 4.3 MVP Settings
+### 4.3 MVP 設定項目
 - `max_record_seconds`
-- `model` (`small` or `medium`)
+- `model`（`small` または `medium`）
 - `auto_type`
 - `text_cleanup`
 
-### 4.4 Text Injection
-- Prioritize Wayland-compatible injection method.
-- MVP primary path is `wtype`.
+### 4.4 テキスト注入
+- Wayland 互換方式を第一優先にする。
+- MVP の主経路は `wtype` とする。
 
-## 5. Resolved Defaults For Former TODOs
-- Single-instance IPC: use `D-Bus`.
-- Desktop entry (`.desktop`): provide it.
-- Distribution strategy: AppImage first; deb/Flatpak later.
-- Model delivery: download on first launch; default model is `medium`.
-- Default close behavior: hide to tray/background (do not terminate).
-- API key storage: GNOME Keyring (Secret Service).
-- Injection fallback policy: `wtype` in MVP; `ydotool` is future extension.
-- In-app global hotkey manager: out of MVP scope; rely on GNOME custom shortcut.
+## 5. 旧 TODO の暫定デフォルト（確定）
+- 単一インスタンス IPC: `D-Bus` を採用
+- `.desktop` エントリ: 提供する
+- 配布方式: AppImage 優先（deb/Flatpak は将来対応）
+- モデル配布: 初回起動時ダウンロード、初期値は `small`
+- 閉じる操作のデフォルト: 終了ではなく非表示（常駐継続）
+- API キー保存: GNOME Keyring（Secret Service）
+- 入力注入フォールバック方針: MVP は `wtype` 中心、`ydotool` は拡張
+- アプリ内グローバルホットキー: MVP 対象外（GNOME カスタムショートカット前提）
 
-## 6. Contracts (Public Interfaces)
+## 6. 契約（公開インターフェース）
 
-### 6.1 CLI Contract
+### 6.1 CLI 契約
 - `notype`
-  - If not running: start app.
-  - If already running: bring main pill to front.
+  - 未起動時: 起動する
+  - 起動済み時: メインピルを前面化する
 - `notype --settings`
-  - If not running: start app and open settings.
-  - If already running: bring settings window to front.
+  - 未起動時: 起動して設定を開く
+  - 起動済み時: 設定ウィンドウを前面化する
 - `notype --quit`
-  - Send termination request to running instance.
+  - 起動済みインスタンスに終了要求を送る
 
-### 6.2 Single-Instance IPC Contract (D-Bus)
+### 6.2 単一インスタンス IPC 契約（D-Bus）
 - `ShowMain`
 - `ShowSettings`
 - `Quit`
 
-### 6.3 State Machine Contract
-- Allowed values: `Idle | Recording | Processing | Ready`
-- Any error path must transition back to `Idle`.
+### 6.3 状態機械契約
+- 許可値: `Idle | Recording | Processing | Ready`
+- すべてのエラー経路は `Idle` に戻す。
 
-### 6.4 Minimal Settings Schema Contract
+### 6.4 最小設定スキーマ契約
 - `max_record_seconds: number`
 - `model: "small" | "medium"`
 - `auto_type: boolean`
 - `text_cleanup: boolean`
-- `llm_postprocess_enabled: boolean` (extension)
-- `llm_provider: string` (extension)
+- `llm_postprocess_enabled: boolean`（拡張）
+- `llm_provider: string`（拡張）
 
-## 7. Development Rules For Agents
-- Never block UI thread:
-  - Recording, STT, and post-processing run asynchronously.
-- Do not send audio data externally.
-  - If LLM post-processing is enabled, send text only.
-- Always clean temp files on success and failure.
-- On failure, recover to `Idle` and allow retry.
-- Every change must map to acceptance criteria coverage.
+## 7. エージェント向け開発ルール
+- UI スレッドをブロックしない。
+  - 録音/STT/後処理はすべて非同期で実行する。
+- 音声データを外部送信しない。
+  - LLM 後処理有効時も送信対象はテキストのみ。
+- 一時ファイルは成功/失敗の両経路で必ず清掃する。
+- 失敗時は `Idle` に復帰し、即再試行可能にする。
+- すべての変更を受け入れ基準に対応付ける。
 
-## 8. Acceptance Criteria Checklist (MVP)
-- [ ] AC-01: With cursor in VS Code, 10-second dictation and stop injects text when Auto-type is ON.
-- [ ] AC-02: With Auto-type OFF, result appears in UI and `Type` injects text on demand.
-- [ ] AC-03: UI remains responsive during recording and processing.
-- [ ] AC-04: Window stays always-on-top and supports drag movement.
-- [ ] AC-05: App can auto-start after login.
-- [ ] AC-06: App works with network disabled when LLM is OFF.
-- [ ] AC-07: `notype --settings` opens settings (or foregrounds existing one).
-- [ ] AC-08: `notype --quit` terminates running instance safely.
+## 8. 受け入れ基準チェックリスト（MVP）
+- [ ] AC-01: VS Code にカーソルを置き、10 秒発話して停止すると Auto-type ON で入力される
+- [ ] AC-02: Auto-type OFF では結果表示後に `Type` 押下で入力される
+- [ ] AC-03: 録音中/処理中も UI が応答する
+- [ ] AC-04: ウィンドウが常に最前面でドラッグ移動できる
+- [ ] AC-05: ログイン後に自動起動できる
+- [ ] AC-06: LLM OFF ならネットワーク遮断時でも動作する
+- [ ] AC-07: `notype --settings` で設定が開く（または既存設定画面を前面化）
+- [ ] AC-08: `notype --quit` で安全に終了できる
 
-## 9. Additional Failure-Path Test Scenarios
-- [ ] STT failure shows clear error and returns to `Idle`.
-- [ ] Input injection failure preserves result and supports `Copy` fallback.
-- [ ] Crash during recording can recover cleanly on restart.
-- [ ] Network-off behavior is stable and predictable.
+## 9. 追加の失敗系テストシナリオ
+- [ ] STT 失敗時に明確なエラーを表示し `Idle` に戻る
+- [ ] 入力注入失敗時に結果保持と `Copy` 代替が可能
+- [ ] 録音中クラッシュ後に再起動で正常復帰できる
+- [ ] ネットワーク遮断時の挙動が安定している
 
-## 10. Concrete Test Scenarios For Implementers
-1. `notype` starts new instance when not running, foregrounds when already running.
-2. `notype --settings` opens/foregrounds settings regardless of current state.
-3. `notype --quit` shuts down safely and app can be relaunched.
-4. 10-second record -> STT -> Auto-type ON injects into VS Code.
-5. Auto-type OFF keeps result in UI until manual `Type`.
-6. No UI hang during `Recording` and `Processing`.
-7. With network disabled and LLM OFF, full flow still succeeds.
-8. STT failure is recoverable and ends in `Idle`.
-9. Injection failure still allows successful `Copy` usage.
-10. After relogin, auto-start works and pill placement persists.
+## 10. 実装者向け具体テストシナリオ
+1. `notype` は未起動時に新規起動、起動済み時に前面化する
+2. `notype --settings` は状態に関係なく設定画面を表示/前面化する
+3. `notype --quit` は安全に終了し、その後再起動できる
+4. 10 秒録音 -> STT -> Auto-type ON で VS Code に注入される
+5. Auto-type OFF では UI 表示後に手動 `Type` で注入される
+6. `Recording` と `Processing` で UI ハングが起きない
+7. ネットワーク遮断 + LLM OFF で一連フローが成立する
+8. STT 失敗時に復帰可能で最終状態が `Idle` になる
+9. 注入失敗時も `Copy` により利用継続できる
+10. 再ログイン後に自動起動し、ピル位置調整が維持される
 
-## 11. Future Extensions
-- LLM post-processing rule templates
-- Microphone device selection
-- Pill opacity and always-on-top toggle
-- Richer Xorg fallback injection options
+## 11. 将来拡張
+- LLM 後処理ルールテンプレート
+- マイクデバイス選択
+- ピル不透明度、最前面トグル
+- Xorg 向け入力注入フォールバック拡充
 
-## 12. Assumptions And Defaults
-- Target environment is Linux GNOME, Wayland first.
-- MVP must stay local-STT-centered and zero-cost for core flow.
-- Unresolved TODOs are not deferred; this guide fixes defaults.
-- This document is agent-first implementation guidance; human onboarding details stay minimal.
+## 12. 前提とデフォルト
+- 対象環境は Linux GNOME、Wayland 優先
+- MVP はローカル STT 中心、無料運用を維持
+- 未確定 TODO は保留せず本書で暫定デフォルトを固定
+- 本書はエージェント実装ガイドを主目的とし、人間向け導入説明は最小限

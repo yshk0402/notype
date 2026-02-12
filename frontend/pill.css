@@ -1,0 +1,84 @@
+:root {
+  --bg: #f7f7f8;
+  --line: rgba(10, 10, 10, 0.08);
+  --text: #202428;
+  --muted: #68707a;
+  --idle: #9ca3af;
+  --recording: #ef4444;
+  --processing: #f59e0b;
+  --ready: #10b981;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: transparent;
+  font-family: "Noto Sans JP", "SF Pro Text", sans-serif;
+  color: var(--text);
+  padding: 8px;
+}
+
+.pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 56px;
+  padding: 0 14px;
+  border-radius: 22px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12), 0 2px 4px rgba(15, 23, 42, 0.07);
+  -webkit-app-region: drag;
+}
+
+.icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: white;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.icon-btn.mic.recording {
+  border-color: rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.state-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--idle);
+}
+
+.state-dot.recording {
+  background: var(--recording);
+}
+
+.state-dot.processing {
+  background: var(--processing);
+}
+
+.state-dot.ready {
+  background: var(--ready);
+}
+
+.state-text {
+  width: 72px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.hint {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--muted);
+}

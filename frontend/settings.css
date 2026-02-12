@@ -1,0 +1,168 @@
+:root {
+  --bg: #f3f4f6;
+  --panel: #ffffff;
+  --line: #d4d8de;
+  --text: #111827;
+  --muted: #6b7280;
+  --accent: #0369a1;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Noto Sans JP", "SF Pro Text", sans-serif;
+  color: var(--text);
+  background: linear-gradient(150deg, #f9fafb, #eef2ff 40%, #ecfeff);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 100vh;
+}
+
+.side-nav {
+  border-right: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.7);
+  padding: 20px 14px;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.side-nav h1 {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+
+.nav-btn {
+  text-align: left;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.nav-btn.active {
+  border-color: rgba(3, 105, 161, 0.25);
+  background: rgba(3, 105, 161, 0.12);
+  color: #0c4a6e;
+  font-weight: 600;
+}
+
+.content {
+  padding: 20px 24px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.header h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+}
+
+button {
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+button.ghost {
+  background: white;
+}
+
+.status {
+  min-height: 20px;
+  margin: 8px 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.panel {
+  display: none;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  gap: 12px;
+}
+
+.panel.active {
+  display: grid;
+}
+
+.panel h3 {
+  margin: 0;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+
+label.inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+input,
+select {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  background: white;
+}
+
+.help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.deps {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--muted);
+}
+
+@media (max-width: 800px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .side-nav {
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    align-items: center;
+  }
+
+  .side-nav h1 {
+    grid-column: 1 / -1;
+    margin-bottom: 4px;
+  }
+}

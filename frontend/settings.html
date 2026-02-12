@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>notype Settings</title>
+    <link rel="stylesheet" href="./settings.css" />
+  </head>
+  <body>
+    <main class="layout">
+      <aside class="side-nav" aria-label="設定カテゴリ">
+        <h1>notype</h1>
+        <button class="nav-btn active" data-target="general">General</button>
+        <button class="nav-btn" data-target="typing">Typing</button>
+        <button class="nav-btn" data-target="api">API</button>
+        <button class="nav-btn" data-target="system">System</button>
+      </aside>
+
+      <section class="content">
+        <header class="header">
+          <h2 id="sectionTitle">General</h2>
+          <div class="actions">
+            <button id="reloadSettings" class="ghost">Reload</button>
+            <button id="saveSettings" class="primary">Save</button>
+          </div>
+        </header>
+
+        <p id="statusText" class="status" aria-live="polite"></p>
+
+        <section id="general" class="panel active">
+          <h3>Basic</h3>
+          <label>
+            max_record_seconds
+            <input id="maxRecord" type="number" min="5" max="120" />
+          </label>
+          <label>
+            model
+            <select id="model">
+              <option value="small">small</option>
+              <option value="medium">medium</option>
+            </select>
+          </label>
+          <label class="inline"><input id="autoType" type="checkbox" /> auto_type</label>
+          <label class="inline"><input id="textCleanup" type="checkbox" /> text_cleanup</label>
+        </section>
+
+        <section id="typing" class="panel">
+          <h3>Realtime Typing</h3>
+          <label class="inline"><input id="realtimeEnabled" type="checkbox" /> realtime_enabled</label>
+          <label>
+            partial_autotype_mode
+            <select id="partialMode">
+              <option value="replace">replace</option>
+            </select>
+          </label>
+          <p class="help">Wayland での入力は `wtype` を優先して使用します。</p>
+        </section>
+
+        <section id="api" class="panel">
+          <h3>LLM / API</h3>
+          <label class="inline"><input id="llmEnabled" type="checkbox" /> llm_postprocess_enabled</label>
+          <label>
+            llm_provider
+            <input id="llmProvider" type="text" placeholder="openai / anthropic / ..." />
+          </label>
+          <label>
+            llm_model
+            <input id="llmModel" type="text" placeholder="gpt-4o-mini など" />
+          </label>
+          <label>
+            api_base_url
+            <input id="llmApiBaseUrl" type="url" placeholder="https://api.example.com/v1" />
+          </label>
+          <label>
+            api_key
+            <input id="llmApiKey" type="password" placeholder="sk-..." />
+          </label>
+          <p class="help">MVP では API キーは設定ファイルに保存されます。実運用では Keyring 連携予定です。</p>
+        </section>
+
+        <section id="system" class="panel">
+          <h3>Runtime Dependencies</h3>
+          <ul id="depsList" class="deps"></ul>
+          <button id="checkDeps" class="ghost">Check Dependencies</button>
+        </section>
+      </section>
+    </main>
+
+    <script type="module" src="./settings.js"></script>
+  </body>
+</html>

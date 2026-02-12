@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=notype
+Comment=Autostart notype floating pill
+Exec=notype
+Icon=notype
+Terminal=false
+X-GNOME-Autostart-enabled=true
